@@ -43,7 +43,16 @@ class Hiera
 
       def lookup(key, scope, order_override, resolution_type)
 
-        answer = nil
+        if resolution_type == :array
+          answer = []
+        elsif resolution_type == :hash
+          answer = {}
+        elsif resolution_type == :priority
+          answer = nil
+        else
+          Hiera.debug("[hiera-consul]: Unknown resolution type: #{resolution_type}")
+          return nil
+        end
 
         paths = @config[:paths].map { |p| Backend.parse_string(p, scope, { 'key' => key }) }
         paths.insert(0, order_override) if order_override
@@ -66,9 +75,17 @@ class Hiera
             Hiera.debug("[hiera-consul]: We only support queries to catalog and kv and you asked #{path}, skipping")
             next
           end
-          answer = wrapquery("#{path}/#{key}")
-          next unless answer
-          break
+          this_answer = wrapquery("#{path}/#{key}")
+          Hiera.debug("[hiera-consul]: This answer is #{this_answer}")
+          if resolution_type == :array
+            answer = answer + this_answer unless ! this_answer
+          elsif resolution_type == :hash
+            answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
+          elsif resolution_type == :priority
+            answer = this_answer 
+            break unless !answer
+          end
+          Hiera.debug("[hiera-consul]: Answer is now #{answer}")
         end
         answer
       end
@@ -121,24 +138,28 @@ class Hiera
             Hiera.debug("[hiera-consul]: HTTP response code was #{result.code}")
             return answer
           end
-          Hiera.debug("[hiera-consul]: Answer was #{result.body}")
           answer = parse_result(result.body)
+          Hiera.debug("[hiera-consul]: Answer from #{path} was #{answer}")
           success=false
           if @config[:autoconvert]
-              if @config[:autoconvert][:yaml]
+              if @config[:autoconvert].include? 'yaml'
                   require 'yaml'
                   begin
                       answer = YAML.load(answer)
-                      success=false
+                      Hiera.debug("[hiera-consul]: Answer was autoconverted as yaml")
+                      success=true
                   rescue
+                      Hiera.debug("[hiera-consul]: Answer was NOT autoconverted as yaml")
                   end
               end
-              if @config[:autoconvert][:json] and success
+              if @config[:autoconvert].include? 'json' and ! success
                   require 'json'
                   begin
                       answer = JSON.load(answer)
-                      success=false
+                      Hiera.debug("[hiera-consul]: Answer was autoconverted as json")
+                      success=true
                   rescue
+                      Hiera.debug("[hiera-consul]: Answer was NOT autoconverted as json")
                   end
               end
           end
