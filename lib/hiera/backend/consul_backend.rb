@@ -56,6 +56,7 @@ class Hiera
 
 catch (:found) do
         paths.each do |path|
+#puts "checking path #{path}"
           if path == 'services'
             if @cache.has_key?(key)
               answer = @cache[key]
@@ -92,7 +93,6 @@ catch (:found) do
             if this_answer.is_a? Hash
               for index2 in 0..key_parts.length-1
                 key_part=key_parts[index2]
-#puts index
 #puts index2
 #puts key
 #puts key_part
@@ -174,8 +174,12 @@ end
           res_array = JSON.parse(res)
           # See if we are a k/v return or a catalog return
           if res_array.length > 0
-            if res_array.first.include? 'Value'
-              answer = Base64.decode64(res_array.first['Value'])
+            if res_array.first.include? 'Value' 
+              if res_array.first['Value'].nil?
+                answer=nil
+              else
+                answer = Base64.decode64(res_array.first['Value'])
+              end
             else
               answer = res_array
             end
@@ -197,6 +201,8 @@ end
       end
 
       def wrapquery(path)
+
+#puts "#{path}#{token(path)}"
 
           httpreq = Net::HTTP::Get.new("#{path}#{token(path)}")
           answer = nil
