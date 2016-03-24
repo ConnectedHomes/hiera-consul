@@ -62,26 +62,28 @@ catch (:found) do
               return answer
             end
           end
-          Hiera.debug("[hiera-consul]: Lookup #{path}/#{key} on #{@config[:host]}:#{@config[:port]}")
-          # Check that we are not looking somewhere that will make hiera crash subsequent lookups
-          if "#{path}/#{key}".match("//")
-            Hiera.debug("[hiera-consul]: The specified path #{path}/#{key} is malformed, skipping")
-            next
-          end
-          # We only support querying the catalog or the kv store
-          if path !~ /^\/v\d\/(catalog|kv)\//
-            Hiera.debug("[hiera-consul]: We only support queries to catalog and kv and you asked #{path}, skipping")
-            next
-          end
-          this_answer = wrapquery("#{path}/#{key}")
-          Hiera.debug("[hiera-consul]: This answer is #{this_answer}")
-          if resolution_type == :array
-            answer = answer + this_answer unless ! this_answer
-          elsif resolution_type == :hash
-            answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
-          else #if resolution_type == :priority
-            answer = this_answer 
-            throw :found if answer
+          [key, key.gsub('::', '/')].each do | key | 
+            Hiera.debug("[hiera-consul]: Lookup #{path}/#{key} on #{@config[:host]}:#{@config[:port]}")
+            # Check that we are not looking somewhere that will make hiera crash subsequent lookups
+            if "#{path}/#{key}".match("//")
+              Hiera.debug("[hiera-consul]: The specified path #{path}/#{key} is malformed, skipping")
+              next
+            end
+            # We only support querying the catalog or the kv store
+            if path !~ /^\/v\d\/(catalog|kv)\//
+              Hiera.debug("[hiera-consul]: We only support queries to catalog and kv and you asked #{path}, skipping")
+              next
+            end
+            this_answer = wrapquery("#{path}/#{key}")
+            Hiera.debug("[hiera-consul]: This answer is #{this_answer}")
+            if resolution_type == :array
+              answer = answer + this_answer unless ! this_answer
+            elsif resolution_type == :hash
+              answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
+            else #if resolution_type == :priority
+              answer = this_answer 
+              throw :found if answer
+            end
           end
           [key, key.gsub('::', '/')].each do | key | 
             key_parts=key.split("/")
@@ -112,7 +114,7 @@ catch (:found) do
                else
                  this_answer = nil
                end
-               break unless !this_answer.nil?
+               break if this_answer.nil?
 #puts this_answer
 #puts resolution_type
                if resolution_type == :array
