@@ -47,16 +47,14 @@ class Hiera
           answer = []
         elsif resolution_type == :hash
           answer = {}
-        elsif resolution_type == :priority
-          answer = nil
         else
-          Hiera.debug("[hiera-consul]: Unknown resolution type: #{resolution_type}")
-          return nil
+          answer = nil
         end
 
         paths = @config[:paths].map { |p| Backend.parse_string(p, scope, { 'key' => key }) }
         paths.insert(0, order_override) if order_override
 
+catch (:found) do
         paths.each do |path|
           if path == 'services'
             if @cache.has_key?(key)
@@ -81,12 +79,55 @@ class Hiera
             answer = answer + this_answer unless ! this_answer
           elsif resolution_type == :hash
             answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
-          elsif resolution_type == :priority
+          else #if resolution_type == :priority
             answer = this_answer 
-            break unless !answer
+            throw :found if answer
           end
-          Hiera.debug("[hiera-consul]: Answer is now #{answer}")
+          [key, key.gsub('::', '/')].each do | key | 
+            key_parts=key.split("/")
+            key=""
+            for index in 0..key_parts.length-1
+               if index>0 
+                  key = key + "/"
+               end
+               key = key + key_parts[index]
+               Hiera.debug("[hiera-consul]: index is now #{index}")
+               Hiera.debug("[hiera-consul]: key is now #{key}")
+               this_answer = wrapquery("#{path}/#{key}")
+               Hiera.debug("[hiera-consul]: This answer is now #{this_answer} of type #{this_answer.class}")
+               if this_answer.is_a? Hash
+                 for index2 in index+1..key_parts.length-1
+                   key_part=key_parts[index2]
+#puts index
+#puts index2
+#puts key
+#puts key_part
+#puts key_parts
+#puts this_answer
+                   this_answer = this_answer[key_part]
+                   Hiera.debug("[hiera-consul]: index2 is now #{index2}; key is #{key_part}; this answer is now #{this_answer}")
+                   break unless this_answer.is_a? Hash
+                   Hiera.debug("[hiera-consul]: This answer is now #{this_answer} of type #{this_answer.class}")
+                 end
+               else
+                 this_answer = nil
+               end
+               break unless !this_answer.nil?
+#puts this_answer
+#puts resolution_type
+               if resolution_type == :array
+                 answer = answer + this_answer unless ! this_answer
+               elsif resolution_type == :hash
+                 answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
+               else #if resolution_type == :priority
+                 answer = this_answer 
+                 throw :found if answer
+               end
+            end 
+            Hiera.debug("[hiera-consul]: Answer is now #{answer}")
+          end
         end
+end
         answer
       end
 

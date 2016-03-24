@@ -33,6 +33,46 @@ The hiera_hash and hiera_array functions work correctly.
 
 You may add more paths as you see fit, using hiera interpolation to create dynamic paths based on facts.
 
+## Examples
+
+NB Consul also provides a gui at ``http://<address>:8500/ui`` if you prefer.
+
+### Classes
+
+Hiera always attempts to load a hiera_array of 'classes'.
+
+To include a class called 'users' in all environments (per the consul block above):
+
+    curl -X PUT -d '["users"]' http://<address>:8500/v1/kv/configuration/common/classes
+
+### Hiera functions
+
+If you load a list of users with hiera(users, []) for example.
+
+To include classes called users and groups in all environments:
+
+    curl -X PUT -d '["users", "groups"]' http://<address>:8500/v1/kv/configuration/common/classes
+
+To include (only) support users in the prod environment:
+
+    curl -X PUT -d '["support_jim", "support_sally"]' http://<address>:8500/v1/kv/configuration/prod/users
+
+To include (only) dev users in the dev environment:
+
+    curl -X PUT -d '["dev_saket", "dev_david"]' http://<address>:8500/v1/kv/configuration/dev/users
+
+To include (only) ops users in all environments:
+
+    curl -X PUT -d '["ops_justin", "ops_cathy"]' http://<address>:8500/v1/kv/configuration/common/users
+
+#### Class Parameters
+
+Once Hiera has found a list of classes, it will attempt to prepopulate the class parameters.
+
+To include structured data from a file:
+
+    curl -X PUT -d @<myconfigfile> http://<address>:8500/v1/kv/configuration/common/myconfig
+
 ## Derivation
 
 Built substantially on top of lynxman's hiera-consul, with a more complete solution for structured data.
