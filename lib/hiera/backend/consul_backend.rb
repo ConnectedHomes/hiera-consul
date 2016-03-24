@@ -87,6 +87,36 @@ catch (:found) do
           end
           [key, key.gsub('::', '/')].each do | key | 
             key_parts=key.split("/")
+            this_answer = wrapquery("#{path}")
+            Hiera.debug("[hiera-consul]: This answer is now #{this_answer} of type #{this_answer.class}")
+            if this_answer.is_a? Hash
+              for index2 in 0..key_parts.length-1
+                key_part=key_parts[index2]
+#puts index
+#puts index2
+#puts key
+#puts key_part
+#puts key_parts
+#puts this_answer
+                this_answer = this_answer[key_part]
+                Hiera.debug("[hiera-consul]: index2 is now #{index2}; key is #{key_part}; this answer is now #{this_answer}")
+                break unless this_answer.is_a? Hash
+                Hiera.debug("[hiera-consul]: This answer is now #{this_answer} of type #{this_answer.class}")
+              end
+            else
+              this_answer = nil
+            end
+            break if this_answer.nil?
+#puts this_answer
+#puts resolution_type
+            if resolution_type == :array
+              answer = answer + this_answer unless ! this_answer
+            elsif resolution_type == :hash
+              answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
+            else #if resolution_type == :priority
+              answer = this_answer 
+              throw :found if answer
+            end
             key=""
             for index in 0..key_parts.length-1
                if index>0 
