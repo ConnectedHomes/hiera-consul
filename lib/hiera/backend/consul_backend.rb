@@ -54,112 +54,90 @@ class Hiera
         paths = @config[:paths].map { |p| Backend.parse_string(p, scope, { 'key' => key }) }
         paths.insert(0, order_override) if order_override
 
-catch (:found) do
-        paths.each do |path|
-#puts "checking path #{path}"
-          if path == 'services'
-            if @cache.has_key?(key)
-              answer = @cache[key]
-              return answer
-            end
-          end
-          [key, key.gsub('::', '/')].each do | key | 
-            Hiera.debug("[hiera-consul]: Lookup #{path}/#{key} on #{@config[:host]}:#{@config[:port]}")
-            # Check that we are not looking somewhere that will make hiera crash subsequent lookups
-            if "#{path}/#{key}".match("//")
-              Hiera.debug("[hiera-consul]: The specified path #{path}/#{key} is malformed, skipping")
-              next
-            end
+        catch (:found) do
+          paths.each do |path|
+            Hiera.debug("[hiera-consul]: Checking path #{path}")
             # We only support querying the catalog or the kv store
             if path !~ /^\/v\d\/(catalog|kv)\//
               Hiera.debug("[hiera-consul]: We only support queries to catalog and kv and you asked #{path}, skipping")
               next
             end
-            this_answer = wrapquery("#{path}/#{key}")
-            Hiera.debug("[hiera-consul]: This answer is #{this_answer}")
-            if resolution_type == :array
-              answer = answer + this_answer unless ! this_answer
-            elsif resolution_type == :hash
-              answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
-            else #if resolution_type == :priority
-              answer = this_answer 
-              throw :found if answer
+            # Check that we are not looking somewhere that will make hiera crash subsequent lookups
+            if "#{path}".match("//")
+              Hiera.debug("[hiera-consul]: The specified path #{path}/#{key_delimited} is malformed, skipping")
+              next
             end
-          end
-          [key, key.gsub('::', '/')].each do | key | 
-            key_parts=key.split("/")
-            this_answer = wrapquery("#{path}")
-            Hiera.debug("[hiera-consul]: This answer is now #{this_answer} of type #{this_answer.class}")
-            if this_answer.is_a? Hash
-              for index2 in 0..key_parts.length-1
-                key_part=key_parts[index2]
-#puts index2
-#puts key
-#puts key_part
-#puts key_parts
-#puts this_answer
-                this_answer = this_answer[key_part]
-                Hiera.debug("[hiera-consul]: index2 is now #{index2}; key is #{key_part}; this answer is now #{this_answer}")
-                break unless this_answer.is_a? Hash
-                Hiera.debug("[hiera-consul]: This answer is now #{this_answer} of type #{this_answer.class}")
+            if path == 'services'
+              if @cache.has_key?(key)
+                answer = @cache[key]
+                return answer
               end
-            else
-              this_answer = nil
             end
-            break if this_answer.nil?
-#puts this_answer
-#puts resolution_type
-            if resolution_type == :array
-              answer = answer + this_answer unless ! this_answer
-            elsif resolution_type == :hash
-              answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
-            else #if resolution_type == :priority
-              answer = this_answer 
-              throw :found if answer
+  
+
+  #lookup fully qualified path
+            [key, key.gsub('::', '/')].each do | key_delimited | 
+              this_answer = wrapquery("#{path}/#{key_delimited}")
+              if resolution_type == :array
+                answer = answer + this_answer unless ! this_answer
+              elsif resolution_type == :hash
+                answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
+              else #if resolution_type == :priority
+                answer = this_answer 
+                throw :found if answer
+              end
             end
-            key=""
-            for index in 0..key_parts.length-1
-               if index>0 
-                  key = key + "/"
-               end
-               key = key + key_parts[index]
-               Hiera.debug("[hiera-consul]: index is now #{index}")
-               Hiera.debug("[hiera-consul]: key is now #{key}")
-               this_answer = wrapquery("#{path}/#{key}")
-               Hiera.debug("[hiera-consul]: This answer is now #{this_answer} of type #{this_answer.class}")
-               if this_answer.is_a? Hash
-                 for index2 in index+1..key_parts.length-1
-                   key_part=key_parts[index2]
-#puts index
-#puts index2
-#puts key
-#puts key_part
-#puts key_parts
-#puts this_answer
-                   this_answer = this_answer[key_part]
-                   Hiera.debug("[hiera-consul]: index2 is now #{index2}; key is #{key_part}; this answer is now #{this_answer}")
-                   break unless this_answer.is_a? Hash
-                   Hiera.debug("[hiera-consul]: This answer is now #{this_answer} of type #{this_answer.class}")
-                 end
-               else
-                 this_answer = nil
-               end
-               break if this_answer.nil?
-#puts this_answer
-#puts resolution_type
-               if resolution_type == :array
-                 answer = answer + this_answer unless ! this_answer
-               elsif resolution_type == :hash
-                 answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
-               else #if resolution_type == :priority
-                 answer = this_answer 
-                 throw :found if answer
-               end
-            end 
+
+  #lookup partial path plus yaml/json
+            [key, key.gsub('::', '/')].each do | key_delimited | 
+              key_parts=key_delimited.split("/")
+              Hiera.debug("[hiera-consul]: key_delimited is now #{key_delimited}")
+              Hiera.debug("[hiera-consul]: key_parts is now #{key_parts}")
+              # search most specific first
+              hash_key_parts=[]
+              while key_parts.size>0 do
+                hash_key_parts = hash_key_parts + [key_parts.pop]
+                key_reconstructed=key_parts.join('/')
+                this_answer = wrapquery("#{path}/#{key_reconstructed}")
+                hash_key_parts_copy = hash_key_parts
+                while this_answer.is_a? Hash do
+                  this_answer=this_answer[hash_key_parts_copy[0]]
+                  hash_key_parts_copy.shift
+                end
+                next if this_answer.nil?
+                if resolution_type == :array
+                  answer = answer + this_answer unless ! this_answer
+                elsif resolution_type == :hash
+                  answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
+                else #if resolution_type == :priority
+                  answer = this_answer 
+                  throw :found if answer
+                end
+              end
+            end
+
+  #lookup base path plus yaml/json
+            [key, key.gsub('::', '/')].each do | key_delimited | 
+              hash_key_parts=key_delimited.split("/")
+              this_answer = wrapquery("#{path}")
+              while this_answer.is_a? Hash do
+                this_answer=this_answer[hash_key_parts[0]]
+                hash_key_parts.shift
+              end
+              next if this_answer.nil?
+              if resolution_type == :array
+                answer = answer + this_answer unless ! this_answer
+              elsif resolution_type == :hash
+                answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
+              else #if resolution_type == :priority
+                answer = this_answer 
+                throw :found if answer
+              end
+            end
+
             Hiera.debug("[hiera-consul]: Answer is now #{answer}")
           end
         end
-end
         answer
       end
 
@@ -202,7 +180,7 @@ end
 
       def wrapquery(path)
 
-#puts "#{path}#{token(path)}"
+          Hiera.debug("[hiera-consul]: Lookup #{path} on #{@config[:host]}:#{@config[:port]}")
 
           httpreq = Net::HTTP::Get.new("#{path}#{token(path)}")
           answer = nil
