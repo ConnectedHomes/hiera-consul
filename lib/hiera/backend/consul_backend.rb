@@ -100,11 +100,13 @@ class Hiera
                 key_reconstructed=key_parts.join('/')
                 this_answer = wrapquery("#{path}/#{key_reconstructed}")
                 hash_key_parts_copy = hash_key_parts
-                while this_answer.is_a? Hash do
+                while hash_key_parts_copy.size>0 do
+                  break unless this_answer.is_a? Hash 
                   this_answer=this_answer[hash_key_parts_copy[0]]
                   hash_key_parts_copy.shift
                 end
                 next if this_answer.nil?
+                next if hash_key_parts_copy.size>0
                 if resolution_type == :array
                   answer = answer + this_answer unless ! this_answer
                 elsif resolution_type == :hash
@@ -120,11 +122,13 @@ class Hiera
             [key, key.gsub('::', '/')].each do | key_delimited | 
               hash_key_parts=key_delimited.split("/")
               this_answer = wrapquery("#{path}")
-              while this_answer.is_a? Hash do
+              while hash_key_parts.size>0 do
+                break unless this_answer.is_a? Hash 
                 this_answer=this_answer[hash_key_parts[0]]
                 hash_key_parts.shift
               end
               next if this_answer.nil?
+              next if hash_key_parts.size>0
               if resolution_type == :array
                 answer = answer + this_answer unless ! this_answer
               elsif resolution_type == :hash
