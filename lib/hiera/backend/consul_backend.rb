@@ -209,7 +209,7 @@ class Hiera
                       answer = YAML.load(answer)
                       Hiera.debug("[hiera-consul]: Answer was autoconverted as yaml")
                       success=true
-                  rescue
+                  rescue Exception
                       Hiera.debug("[hiera-consul]: Answer was NOT autoconverted as yaml")
                   end
               end
@@ -219,7 +219,7 @@ class Hiera
                       answer = JSON.load(answer)
                       Hiera.debug("[hiera-consul]: Answer was autoconverted as json")
                       success=true
-                  rescue
+                  rescue Exception
                       Hiera.debug("[hiera-consul]: Answer was NOT autoconverted as json")
                   end
               end
