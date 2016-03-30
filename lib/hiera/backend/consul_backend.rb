@@ -8,40 +8,49 @@ class Hiera
         require 'net/https'
         require 'json'
         @config = Config[:consul]
-        if (@config[:host] && @config[:port])
-          @consul = Net::HTTP.new(@config[:host], @config[:port])
-        else
+        if (@config[:host].nil? || @config[:port].nil?)
           raise "[hiera-consul]: Missing minimum configuration, please check hiera.yaml"
         end
+      end
 
-        @consul.read_timeout = @config[:http_read_timeout] || 10
-        @consul.open_timeout = @config[:http_connect_timeout] || 10
-        @cache = {}
+      def lazy_connection_setup(scope) 
+        if @connection.nil?
+          @host =  Backend.parse_string(@config[:host], scope) 
+          Hiera.debug("[hiera-consul]: Using host #{@host}")
+          @consul = Net::HTTP.new(@host, @config[:port])
+          @consul.read_timeout = @config[:http_read_timeout] || 10
+          @consul.open_timeout = @config[:http_connect_timeout] || 10
+          @cache = {}
+  
+          if @config[:use_ssl]
+            @consul.use_ssl = true
 
-        if @config[:use_ssl]
-          @consul.use_ssl = true
+            if @config[:ssl_verify] == false
+              @consul.verify_mode = OpenSSL::SSL::VERIFY_NONE
+            else
+              @consul.verify_mode = OpenSSL::SSL::VERIFY_PEER
+            end
 
-          if @config[:ssl_verify] == false
-            @consul.verify_mode = OpenSSL::SSL::VERIFY_NONE
+            if @config[:ssl_cert]
+              store = OpenSSL::X509::Store.new
+              store.add_cert(OpenSSL::X509::Certificate.new(File.read(@config[:ssl_ca_cert])))
+              @consul.cert_store = store
+
+              @consul.key = OpenSSL::PKey::RSA.new(File.read(@config[:ssl_key]))
+              @consul.cert = OpenSSL::X509::Certificate.new(File.read(@config[:ssl_cert]))
+            end
           else
-            @consul.verify_mode = OpenSSL::SSL::VERIFY_PEER
+            @consul.use_ssl = false
           end
-
-          if @config[:ssl_cert]
-            store = OpenSSL::X509::Store.new
-            store.add_cert(OpenSSL::X509::Certificate.new(File.read(@config[:ssl_ca_cert])))
-            @consul.cert_store = store
-
-            @consul.key = OpenSSL::PKey::RSA.new(File.read(@config[:ssl_key]))
-            @consul.cert = OpenSSL::X509::Certificate.new(File.read(@config[:ssl_cert]))
-          end
-        else
-          @consul.use_ssl = false
+          build_cache!
         end
-        build_cache!
       end
 
       def lookup(key, scope, order_override, resolution_type)
+        lazy_connection_setup(scope) 
+
+        host =  Backend.parse_string(@config[:host], scope, { 'key' => key }) 
+        Hiera.debug("[hiera-consul]: Using connection #{@consul} to host #{host}")
 
         if resolution_type == :array
           answer = []
@@ -184,7 +193,7 @@ class Hiera
 
       def wrapquery(path)
 
-          Hiera.debug("[hiera-consul]: Lookup #{path} on #{@config[:host]}:#{@config[:port]}")
+          Hiera.debug("[hiera-consul]: Lookup #{path} on #{@host}:#{@config[:port]}")
 
           httpreq = Net::HTTP::Get.new("#{path}#{token(path)}")
           answer = nil
