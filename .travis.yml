@@ -2,6 +2,7 @@ language: ruby
 rvm:
 - 2.0.0
 before_install: gem install bundler -v 1.10.6
+script: gem build bgch-hiera-consul.gemspec
 deploy:
   provider: rubygems
   api_key:
