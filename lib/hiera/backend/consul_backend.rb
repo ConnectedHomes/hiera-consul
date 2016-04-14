@@ -98,7 +98,7 @@ class Hiera
                   answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
                 else #if resolution_type == :priority
                   answer = this_answer 
-                  throw :found if answer
+                  throw :found if ! answer.nil?
                 end
               end
 
@@ -127,7 +127,7 @@ class Hiera
                     answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
                   else #if resolution_type == :priority
                     answer = this_answer 
-                    throw :found if answer
+                    throw :found if ! answer.nil?
                   end
                 end
               end
@@ -149,7 +149,7 @@ class Hiera
                   answer = this_answer.merge(answer) unless ! this_answer #Earliest value takes precedence
                 else #if resolution_type == :priority
                   answer = this_answer 
-                  throw :found if answer
+                  throw :found if ! answer.nil?
                 end
               end
 
